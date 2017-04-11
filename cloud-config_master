@@ -1,0 +1,44 @@
+#cloud-config
+
+ssh_authorized_keys:
+ - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCxyDcN43X0lBg1GAN62nuh/xo+oxYEA9P6GLPpk3U/R4X91UyRGBlQCETFQnEV4yNEkU/LYtFDK1/MAWSUM5eEYJPtEnKvn1ieBys2EpLrTsoq6pw1xMikzkFMv51W6lR94MWAgeuB+YcLqfbOvKpINBTeoQTzVgRlJik5OGXR77jsQIk57rcqHfwUhncTKMbbmP3kFEE+3DYGrWgJ6ZHT+hQE/psm1Tq2Akqwh2ltzV+MqewacPttgqXiSyLQjqmS0VmfPhlfDCRemV8yi+gpqLD2cASyFKrzR89BhjJlGR0GFDZOnxU9Ljg59qT3z5OLSKl7SC/SXwQojStfiL3f4VSnA7ZqiX4fGRHupB/ihgVtwnpwMZ8Gd7x9QyNcDxkk/siFH3rpm1sNkvh193PA5TPQaCQrwxzsQNdc59AGa/VsmNHCDustBYo+ponNTcpNkaXWU0AT40XL4CaL/gxYrDr8C9f7hEJTci9u3gTRZX5nNY1fuadgx3kTahj5LcL+V2oG3yF7kvTiowaOv1nMzJm1msfv5brUf6vzUYZDN3AAJNUwnzY4hyTP4Evj33tVXtN4FkATAELoxQr1GsU0E1kx8D4QIuEwnpefh/q77CvGeZh7aT+OWr9kjXKuNePJAvtxP9QXwg7pDVC434fqqft4EeZAQZs/9clPKgNTzQ== christian.staubli@gmail.com
+
+hostname: kube-apiserver
+
+coreos:
+  units:
+    - name: public.network
+      content: |
+        [Match]
+        MACAddress=52:54:00:8c:aa:68
+
+        [Network]
+        Address=192.168.20.200/24
+        Gateway=192.168.20.1
+        DNS=8.8.8.8
+    - name: service.network
+      content: |
+        [Match]
+        MACAddress=52:54:00:8a:90:1e
+
+        [Network]
+        Address=10.3.0.1/24
+    - name: pod.network
+      content: |
+        [Match]
+        MACAddress=52:54:00:ea:30:de
+
+        [Network]
+        Address=10.2.0.1/16
+
+  etcd2:
+    # generate a new token for each unique cluster from https://discovery.etcd.io/new?size=3
+    discovery: "https://discovery.etcd.io/3e3f55d84a86e06e40d0a86e5826efb4"
+    # multi-region and multi-cloud deployments need to use $public_ipv4
+    advertise-client-urls: "http://192.168.20.200:2379"
+    initial-advertise-peer-urls: "http://10.3.0.1:2380"
+    # listen on both the official ports and the legacy ports
+    # legacy ports can be omitted if your application doesn't depend on them
+    listen-client-urls: "http://0.0.0.0:2379,http://0.0.0.0:4001"
+    listen-peer-urls: "http://10.3.0.1:2380,http://10.3.0.1:7001"
+

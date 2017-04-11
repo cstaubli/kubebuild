@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+export MASTER_HOST=192.168.20.200
+export ETCD_ENDPOINTS=http://192.168.20.200:2379
+export POD_NETWORK=10.2.0.0/16
+export SERVICE_IP_RANGE=10.3.0.0/24
+export K8S_SERVICE_IP=10.3.0.1
+export DNS_SERVICE_IP=10.3.0.10
+
