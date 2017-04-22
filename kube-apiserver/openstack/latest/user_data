@@ -30,8 +30,12 @@ write_files:
   - path: /etc/flannel/options.env
     permissions: '0644'
     content: |
-      FLANNELD_IFACE=192.168.20.200
-      FLANNELD_ETCD_ENDPOINTS=http://10.3.0.11:2379,http://10.3.0.12:2379,http://10.3.0.1:2379
+      FLANNELD_IFACE=10.2.0.1
+      FLANNELD_ETCD_ENDPOINTS=http://192.168.20.200:2379
+  - path: /etc/kubernetes/tokenfile.csv
+    permissions: '0644'
+    content: |
+      31ada4fd-adec-460c-809a-9e56ceb75269,admin,admin
   - path: /etc/kubernetes/manifests/kube-apiserver.yaml
     permissions: '0644'
     content: |
@@ -43,12 +47,12 @@ write_files:
       spec:
         containers:
         - name: kube-apiserver
-          image: gcr.io/google_containers/hyperkube-amd64:v1.6.2
+          image: gcr.io/google_containers/hyperkube:v1.2.4
           command:
           - /hyperkube
           - apiserver
           - --bind-address=0.0.0.0
-          - --etcd-servers=http://10.3.0.11:2379,http://10.3.0.12:2379,http://10.3.0.1:2379
+          - --etcd-servers=http://10.3.0.1:2379
           - --allow-privileged=true
           - --service-cluster-ip-range=10.3.0.0/24
           - --secure-port=443
@@ -59,6 +63,7 @@ write_files:
           - --client-ca-file=/etc/kubernetes/ssl/ca.pem
           - --service-account-key-file=/etc/kubernetes/ssl/apiserver-key.pem
           - --insecure-bind-address=0.0.0.0
+          - --token-auth-file=/etc/kubernetes/tokenfile.csv
           securityContext:
             privileged: true
           ports:
@@ -94,7 +99,7 @@ write_files:
         hostNetwork: true
         containers:
         - name: kube-proxy
-          image: gcr.io/google_containers/hyperkube-amd64:v1.6.2
+          image: gcr.io/google_containers/hyperkube:v1.2.4
           command:
           - /hyperkube
           - proxy
@@ -122,7 +127,7 @@ write_files:
       spec:
         containers:
         - name: kube-controller-manager
-          image: gcr.io/google_containers/hyperkube-amd64:v1.6.2
+          image: gcr.io/google_containers/hyperkube:v1.2.4
           command:
           - /hyperkube
           - controller-manager
@@ -156,7 +161,7 @@ write_files:
       spec:
         containers:
         - name: kube-scheduler
-          image: gcr.io/google_containers/hyperkube-amd64:v1.6.2
+          image: gcr.io/google_containers/hyperkube:v1.2.4
           command:
           - /hyperkube
           - scheduler
@@ -213,10 +218,6 @@ coreos:
     - name: flanneld.service
       command: start
       drop-ins:
-        - name: 40-ExecStartPre-symlink.conf
-          content: |
-            [Service]
-            ExecStartPre=/usr/bin/ln -sf /etc/flannel/options.env /run/flannel/options.env
         - name: 50-network-config.conf
           content: |
             [Service]
@@ -227,7 +228,6 @@ coreos:
         - name: 50-opts.conf
           content: |
             [Service]
-            #Environment='DOCKER_OPTS=--bridge=cbr0 --iptables=false'
             Requires=flanneld.service
             After=flanneld.service
     - name: docker-tcp.socket
@@ -248,21 +248,31 @@ coreos:
         ExecStartPre=/usr/bin/mkdir -p /etc/kubernetes/manifests
 
         Environment=KUBELET_IMAGE_TAG=v1.6.1_coreos.0
+        Environment="RKT_RUN_ARGS=--uuid-file-save=/var/run/kubelet-pod.uuid \
+          --volume var-log,kind=host,source=/var/log \
+          --mount volume=var-log,target=/var/log \
+          --volume dns,kind=host,source=/etc/resolv.conf \
+          --mount volume=dns,target=/etc/resolv.conf"
+        ExecStartPre=/usr/bin/mkdir -p /var/log/containers
+        ExecStartPre=-/usr/bin/rkt rm --uuid-file=/var/run/kubelet-pod.uuid
         ExecStart=/usr/lib/coreos/kubelet-wrapper \
-        --api-servers=http://192.168.20.200:8080 \
-        --register-node=true \
-        --allow-privileged=true \
-        --config=/etc/kubernetes/manifests \
-        --hostname-override=192.168.20.200 \
-        --cluster-dns=10.3.0.10 \
-        --cluster-domain=cluster.local \
+          --api-servers=http://192.168.20.200:8080 \
+          --register-schedulable=false \
+          --cni-conf-dir=/etc/kubernetes/cni/net.d \
+          --container-runtime=docker \
+          --allow-privileged=true \
+          --pod-manifest-path=/etc/kubernetes/manifests \
+          --hostname-override=192.168.20.200 \
+          --cluster_dns=10.3.0.10 \
+          --cluster_domain=cluster.local
+        ExecStop=-/usr/bin/rkt stop --uuid-file=/var/run/kubelet-pod.uuid
         Restart=always
         RestartSec=10
         [Install]
         WantedBy=multi-user.target
 
   etcd2:
-    discovery: "https://discovery.etcd.io/1e20d411c8cabc835064f119e33ff459" 
+    discovery: "https://discovery.etcd.io/e95e726cdb6cb1ef6b88a24b0d655d19" 
     advertise-client-urls: "http://10.3.0.1:2379"
     initial-advertise-peer-urls: "http://10.3.0.1:2380"
     listen-client-urls: "http://0.0.0.0:2379,http://0.0.0.0:4001"

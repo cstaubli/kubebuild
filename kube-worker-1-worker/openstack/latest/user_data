@@ -146,7 +146,7 @@ coreos:
     reboot-strategy: off
 
   etcd2:
-    discovery: "https://discovery.etcd.io/1e20d411c8cabc835064f119e33ff459"
+    discovery: "https://discovery.etcd.io/6f17cca769bad7e86081ddc818d324bc"
     advertise-client-urls: "http://10.3.0.11:2379"
     initial-advertise-peer-urls: "http://10.3.0.11:2380"
     listen-client-urls: "http://0.0.0.0:2379,http://0.0.0.0:4001"
