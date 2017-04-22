@@ -1,9 +1,9 @@
 <domain type='kvm'>
   <name>kube-apiserver</name>
   <uuid>a4642734-09b1-4b4c-80c7-b4c91f0db750</uuid>
-  <memory unit='KiB'>1048576</memory>
-  <currentMemory unit='KiB'>1048576</currentMemory>
-  <vcpu placement='static'>1</vcpu>
+  <memory unit='KiB'>4194304</memory>
+  <currentMemory unit='KiB'>4194304</currentMemory>
+  <vcpu placement='static'>4</vcpu>
   <os>
     <type arch='x86_64' machine='pc-i440fx-yakkety'>hvm</type>
     <boot dev='hd'/>
@@ -55,7 +55,7 @@
       <address type='pci' domain='0x0000' bus='0x00' slot='0x07' function='0x0'/>
     </controller>
     <filesystem type='mount' accessmode='squash'>
-      <source dir='/home/cstaubli/code/kubebuild/kube-apiserver'/>
+      <source dir='/var/lib/libvirt/images/coreos/kube-apiserver'/>
       <target dir='config-2'/>
       <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
     </filesystem>
