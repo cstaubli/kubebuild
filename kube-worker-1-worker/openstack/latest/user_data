@@ -31,7 +31,7 @@ write_files:
         hostNetwork: true
         containers:
         - name: kube-proxy
-          image: gcr.io/google_containers/hyperkube-amd64:v1.6.2 
+          image: gcr.io/google_containers/hyperkube-amd64:v1.6.2
           command:
           - /hyperkube
           - proxy
@@ -127,7 +127,7 @@ coreos:
         [Service]
         ExecStartPre=/usr/bin/mkdir -p /etc/kubernetes/manifests
 
-        Environment=KUBELET_IMAGE_TAG=v1.6.1_coreos.0 
+        Environment=KUBELET_IMAGE_TAG=v1.6.1_coreos.0
         ExecStart=/usr/lib/coreos/kubelet-wrapper \
         --api-servers=http://192.168.20.200:8080 \
         --register-node=true \
@@ -142,7 +142,7 @@ coreos:
         WantedBy=multi-user.target
 
   update:
-    group: alpha
+    group: beta
     reboot-strategy: off
 
   etcd2:
@@ -152,4 +152,3 @@ coreos:
     listen-client-urls: "http://0.0.0.0:2379,http://0.0.0.0:4001"
     listen-peer-urls: "http://10.3.0.11:2380,http://10.3.0.11:7001"
     data-dir: /var/lib/etcd2
-
