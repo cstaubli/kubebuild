@@ -18,9 +18,9 @@ write_files:
   - path: /etc/flannel/options.env
     permissions: '0644'
     content: |
-      FLANNELD_IFACE=eth2
-      FLANNELD_V=1
-      FLANNELD_ETCD_ENDPOINTS=http://10.3.0.11:2379,http://10.3.0.12:2379,http://10.3.0.1:2379
+      FLANNELD_IFACE=10.2.0.10
+      FLANNELD_ETCD_ENDPOINTS=http://10.3.0.1:2379
+      FLANNELD_ETCD_PREFIX=/coreos.com/network
   - path: /etc/kubernetes/ssl/ca.pem
     permissions: '0644'
     content: |
@@ -47,27 +47,34 @@ write_files:
         name: kube-apiserver
         namespace: kube-system
       spec:
+        hostNetwork: true
         containers:
         - name: kube-apiserver
-          image: gcr.io/google-containers/hyperkube:v1.4.12
+          image: quay.io/coreos/hyperkube:v1.6.1_coreos.0
           command:
           - /hyperkube
           - apiserver
           - --bind-address=0.0.0.0
-          - --etcd-servers=http://10.3.0.11:2379,http://10.3.0.12:2379,http://10.3.0.1:2379
+          - --etcd-servers=http://10.3.0.1:2379
           - --allow-privileged=true
           - --service-cluster-ip-range=10.3.0.0/24
           - --secure-port=443
           - --advertise-address=10.2.0.200
-          - --admission-control=NamespaceLifecycle,NamespaceExists,LimitRanger,SecurityContextDeny,ServiceAccount,ResourceQuota
+          - --admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota
           - --tls-cert-file=/etc/kubernetes/ssl/apiserver.pem
           - --tls-private-key-file=/etc/kubernetes/ssl/apiserver-key.pem
           - --client-ca-file=/etc/kubernetes/ssl/ca.pem
           - --service-account-key-file=/etc/kubernetes/ssl/apiserver-key.pem
-          - --insecure-bind-address=0.0.0.0
+          - --runtime-config=extensions/v1beta1/networkpolicies=true
+          - --anonymous-auth=false
           - --token-auth-file=/etc/kubernetes/tokenfile.csv
-          securityContext:
-            privileged: true
+          livenessProbe:
+            httpGet:
+              host: 127.0.0.1
+              port: 8080
+              path: /healthz
+            initialDelaySeconds: 15
+            timeoutSeconds: 15
           ports:
           - containerPort: 443
             hostPort: 443
@@ -84,10 +91,10 @@ write_files:
             readOnly: true
         volumes:
         - hostPath:
-            path: /etc/kubernetes/ssl
+          path: /etc/kubernetes/ssl
           name: ssl-certs-kubernetes
         - hostPath:
-            path: /usr/share/ca-certificates
+          path: /usr/share/ca-certificates
           name: ssl-certs-host
   - path: /etc/kubernetes/manifests/kube-proxy.yaml
     permissions: '0644'
@@ -101,13 +108,11 @@ write_files:
         hostNetwork: true
         containers:
         - name: kube-proxy
-          image: gcr.io/google-containers/hyperkube:v1.4.12
+          image: quay.io/coreos/hyperkube:v1.6.1_coreos.0
           command:
           - /hyperkube
           - proxy
-          - --master=http://10.2.0.200:8080
-          - --proxy-mode=iptables
-          - --conntrack-max=0
+          - --master=http://127.0.0.1:8080
           securityContext:
             privileged: true
           volumeMounts:
@@ -129,11 +134,12 @@ write_files:
       spec:
         containers:
         - name: kube-controller-manager
-          image: gcr.io/google-containers/hyperkube:v1.4.12
+          image: quay.io/coreos/hyperkube:v1.6.1_coreos.0
           command:
           - /hyperkube
           - controller-manager
-          - --master=http://10.2.0.200:8080
+          - --master=http://127.0.0.1:8080
+          - --leader-elect=true
           - --service-account-private-key-file=/etc/kubernetes/ssl/apiserver-key.pem
           - --root-ca-file=/etc/kubernetes/ssl/ca.pem
           securityContext:
@@ -163,13 +169,23 @@ write_files:
       spec:
         containers:
         - name: kube-scheduler
-          image: gcr.io/google-containers/hyperkube:v1.4.12
+          image: quay.io/coreos/hyperkube:v1.6.1_coreos.0
           command:
           - /hyperkube
           - scheduler
-          - --master=http://10.2.0.200:8080
-          securityContext:
-            privileged: true
+          - --master=http://127.0.0.1:8080
+          - --leader-elect=true
+          resources:
+      requests:
+        cpu: 100m
+      livenessProbe:
+        httpGet:
+          host: 127.0.0.1
+          path: /healthz
+          port: 10251
+        initialDelaySeconds: 15
+        timeoutSeconds: 15
+
   - path: /etc/conf.d/nfs
     permissions: '0644'
     content: |
@@ -240,20 +256,20 @@ coreos:
       command: start
       content: |
         [Service]
-        ExecStartPre=/usr/bin/mkdir -p /etc/kubernetes/manifests
-
         Environment=KUBELET_IMAGE_TAG=v1.6.1_coreos.0
         Environment="RKT_RUN_ARGS=--uuid-file-save=/var/run/kubelet-pod.uuid \
           --volume var-log,kind=host,source=/var/log \
           --mount volume=var-log,target=/var/log \
           --volume dns,kind=host,source=/etc/resolv.conf \
           --mount volume=dns,target=/etc/resolv.conf"
+        ExecStartPre=/usr/bin/mkdir -p /etc/kubernetes/manifests
         ExecStartPre=/usr/bin/mkdir -p /var/log/containers
         ExecStartPre=-/usr/bin/rkt rm --uuid-file=/var/run/kubelet-pod.uuid
         ExecStart=/usr/lib/coreos/kubelet-wrapper \
-          --api-servers=http://10.2.0.200:8080 \
+          --api-servers=http://127.0.0.1:8080 \
           --register-schedulable=false \
           --cni-conf-dir=/etc/kubernetes/cni/net.d \
+          --network-plugin=flanneld \
           --container-runtime=docker \
           --allow-privileged=true \
           --pod-manifest-path=/etc/kubernetes/manifests \
@@ -272,7 +288,7 @@ coreos:
 
   etcd2:
     # https://discovery.etcd.io/new?size=1
-    discovery: "https://discovery.etcd.io/1c25f0de3703f2dfec67440026f99a5f"
+    discovery: "https://discovery.etcd.io/8a388bffdb7ebd0ba9785909058c8255"
     advertise-client-urls: "http://10.3.0.1:2379"
     initial-advertise-peer-urls: "http://10.3.0.1:2380"
     listen-client-urls: "http://0.0.0.0:2379,http://0.0.0.0:4001"
